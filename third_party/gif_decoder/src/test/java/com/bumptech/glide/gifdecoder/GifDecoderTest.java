@@ -2,6 +2,8 @@ package com.bumptech.glide.gifdecoder;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertTrue;
+import static org.robolectric.Shadows.shadowOf;
 
 import android.graphics.Bitmap;
 import android.support.annotation.NonNull;
@@ -14,8 +16,12 @@ import org.junit.runner.RunWith;
 import org.robolectric.RobolectricTestRunner;
 import org.robolectric.Shadows;
 import org.robolectric.annotation.Config;
+import org.robolectric.annotation.Implementation;
+import org.robolectric.annotation.Implements;
+import org.robolectric.shadows.ShadowBitmap;
 
 import java.io.IOException;
+import java.util.Arrays;
 
 /**
  * Tests for {@link com.bumptech.glide.gifdecoder.GifDecoder}.
@@ -37,7 +43,7 @@ public class GifDecoderTest {
     GifHeaderParser headerParser = new GifHeaderParser();
     headerParser.setData(data);
     GifHeader header = headerParser.parseHeader();
-    GifDecoder decoder = new GifDecoder(provider);
+    GifDecoder decoder = new StandardGifDecoder(provider);
     decoder.setData(header, data);
     decoder.advance();
     Bitmap bitmap = decoder.getNextFrame();
@@ -50,7 +56,7 @@ public class GifDecoderTest {
     GifHeader gifheader = new GifHeader();
     gifheader.frameCount = 4;
     byte[] data = new byte[0];
-    GifDecoder decoder = new GifDecoder(provider);
+    GifDecoder decoder = new StandardGifDecoder(provider);
     decoder.setData(gifheader, data);
     assertEquals(-1, decoder.getCurrentFrameIndex());
   }
@@ -60,7 +66,7 @@ public class GifDecoderTest {
     GifHeader gifheader = new GifHeader();
     gifheader.frameCount = 4;
     byte[] data = new byte[0];
-    GifDecoder decoder = new GifDecoder(provider);
+    GifDecoder decoder = new StandardGifDecoder(provider);
     decoder.setData(gifheader, data);
     decoder.advance();
     assertEquals(0, decoder.getCurrentFrameIndex());
@@ -71,7 +77,7 @@ public class GifDecoderTest {
     GifHeader gifheader = new GifHeader();
     gifheader.frameCount = 2;
     byte[] data = new byte[0];
-    GifDecoder decoder = new GifDecoder(provider);
+    GifDecoder decoder = new StandardGifDecoder(provider);
     decoder.setData(gifheader, data);
     decoder.advance();
     decoder.advance();
@@ -84,7 +90,7 @@ public class GifDecoderTest {
     GifHeader gifheader = new GifHeader();
     gifheader.frameCount = 4;
     byte[] data = new byte[0];
-    GifDecoder decoder = new GifDecoder(provider);
+    GifDecoder decoder = new StandardGifDecoder(provider);
     decoder.setData(gifheader, data);
     decoder.advance();
     decoder.advance();
@@ -92,6 +98,65 @@ public class GifDecoderTest {
 
     decoder.setData(gifheader, data);
     assertEquals(-1, decoder.getCurrentFrameIndex());
+  }
+
+  @Test
+  @Config(shadows = {CustomShadowBitmap.class})
+  public void testFirstFrameMustClearBeforeDrawingWhenLastFrameIsDisposalBackground()
+      throws IOException {
+    byte[] data = TestUtil.resourceToBytes(getClass(), "transparent_disposal_background.gif");
+    GifHeaderParser headerParser = new GifHeaderParser();
+    headerParser.setData(data);
+    GifHeader header = headerParser.parseHeader();
+    GifDecoder decoder = new StandardGifDecoder(provider);
+    decoder.setData(header, data);
+    decoder.advance();
+    Bitmap firstFrame = decoder.getNextFrame();
+    decoder.advance();
+    decoder.getNextFrame();
+    decoder.advance();
+    Bitmap firstFrameTwice = decoder.getNextFrame();
+    assertTrue(Arrays.equals((((CustomShadowBitmap) shadowOf(firstFrame))).getPixels(),
+        (((CustomShadowBitmap) shadowOf(firstFrameTwice))).getPixels()));
+  }
+
+  @Test
+  @Config(shadows = {CustomShadowBitmap.class})
+  public void testFirstFrameMustClearBeforeDrawingWhenLastFrameIsDisposalNone() throws IOException {
+    byte[] data = TestUtil.resourceToBytes(getClass(), "transparent_disposal_none.gif");
+    GifHeaderParser headerParser = new GifHeaderParser();
+    headerParser.setData(data);
+    GifHeader header = headerParser.parseHeader();
+    GifDecoder decoder = new StandardGifDecoder(provider);
+    decoder.setData(header, data);
+    decoder.advance();
+    Bitmap firstFrame = decoder.getNextFrame();
+    decoder.advance();
+    decoder.getNextFrame();
+    decoder.advance();
+    Bitmap firstFrameTwice = decoder.getNextFrame();
+    assertTrue(Arrays.equals((((CustomShadowBitmap) shadowOf(firstFrame))).getPixels(),
+        (((CustomShadowBitmap) shadowOf(firstFrameTwice))).getPixels()));
+  }
+
+  /**
+   * Preserve generated bitmap data for checking.
+   */
+  @Implements(Bitmap.class)
+  public static class CustomShadowBitmap extends ShadowBitmap {
+
+    private int[] pixels;
+
+    @Implementation
+    public void setPixels(int[] pixels, int offset, int stride,
+        int x, int y, int width, int height) {
+      this.pixels = new int[pixels.length];
+      System.arraycopy(pixels, 0, this.pixels, 0, this.pixels.length);
+    }
+
+    public int[] getPixels() {
+      return pixels;
+    }
   }
 
   private static class MockProvider implements GifDecoder.BitmapProvider {
@@ -117,6 +182,16 @@ public class GifDecoderTest {
     @Override
     public void release(byte[] bytes) {
       // Do nothing.
+    }
+
+    @Override
+    public int[] obtainIntArray(int size) {
+      return new int[size];
+    }
+
+    @Override
+    public void release(int[] array) {
+      // Do Nothing
     }
 
   }

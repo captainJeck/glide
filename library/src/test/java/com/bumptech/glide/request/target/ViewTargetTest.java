@@ -35,7 +35,6 @@ import org.robolectric.annotation.Implements;
 import org.robolectric.internal.ShadowExtractor;
 import org.robolectric.shadows.ShadowDisplay;
 import org.robolectric.shadows.ShadowView;
-import org.robolectric.shadows.ShadowViewTreeObserver;
 
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -393,8 +392,19 @@ public class ViewTargetTest {
     new TestViewTarget(null);
   }
 
+  @Test
+  public void testDecreasesDimensionsByViewPadding() {
+    SizeReadyCallback cb = mock(SizeReadyCallback.class);
+    view.setLayoutParams(new LayoutParams(100, 100));
+    view.setPadding(25, 25, 25, 25);
+
+    target.getSize(cb);
+
+    verify(cb).onSizeReady(50, 50);
+  }
+
   @Implements(ViewTreeObserver.class)
-  public static class PreDrawShadowViewTreeObserver extends ShadowViewTreeObserver {
+  public static class PreDrawShadowViewTreeObserver {
     private CopyOnWriteArrayList<OnPreDrawListener> preDrawListeners = new CopyOnWriteArrayList<>();
     private boolean isAlive = true;
 

@@ -18,6 +18,7 @@ import com.bumptech.glide.load.engine.DiskCacheStrategy;
 import com.bumptech.glide.load.resource.bitmap.BitmapDrawableTransformation;
 import com.bumptech.glide.load.resource.bitmap.BitmapEncoder;
 import com.bumptech.glide.load.resource.bitmap.CenterCrop;
+import com.bumptech.glide.load.resource.bitmap.CenterInside;
 import com.bumptech.glide.load.resource.bitmap.CircleCrop;
 import com.bumptech.glide.load.resource.bitmap.DownsampleStrategy;
 import com.bumptech.glide.load.resource.bitmap.Downsampler;
@@ -61,6 +62,9 @@ public abstract class BaseRequestOptions<CHILD extends BaseRequestOptions<CHILD>
   private static final int FALLBACK = 1 << 13;
   private static final int FALLBACK_ID = 1 << 14;
   private static final int THEME = 1 << 15;
+  private static final int TRANSFORMATION_ALLOWED = 1 << 16;
+  private static final int TRANSFORMATION_REQUIRED = 1 << 17;
+  private static final int USE_UNLIMITED_SOURCE_GENERATORS_POOL = 1 << 18;
 
   private int fields;
 
@@ -76,6 +80,7 @@ public abstract class BaseRequestOptions<CHILD extends BaseRequestOptions<CHILD>
   private int overrideWidth = UNSET;
   private Key signature = EmptySignature.obtain();
   private boolean isTransformationRequired;
+  private boolean isTransformationAllowed = true;
   private Drawable fallbackDrawable;
   private int fallbackId;
 
@@ -85,6 +90,7 @@ public abstract class BaseRequestOptions<CHILD extends BaseRequestOptions<CHILD>
   private boolean isLocked;
   private Resources.Theme theme;
   private boolean isAutoCloneEnabled;
+  private boolean useUnlimitedSourceGeneratorsPool;
 
   /**
    * Applies a multiplier to the {@link com.bumptech.glide.request.target.Target}'s size before
@@ -106,6 +112,17 @@ public abstract class BaseRequestOptions<CHILD extends BaseRequestOptions<CHILD>
     }
     this.sizeMultiplier = sizeMultiplier;
     fields |= SIZE_MULTIPLIER;
+
+    return selfOrThrowIfLocked();
+  }
+
+  public final CHILD useUnlimitedSourceGeneratorsPool(boolean flag) {
+    if (isAutoCloneEnabled) {
+      return clone().useUnlimitedSourceGeneratorsPool(flag);
+    }
+
+    this.useUnlimitedSourceGeneratorsPool = flag;
+    fields |= USE_UNLIMITED_SOURCE_GENERATORS_POOL;
 
     return selfOrThrowIfLocked();
   }
@@ -409,6 +426,10 @@ public abstract class BaseRequestOptions<CHILD extends BaseRequestOptions<CHILD>
     return selfOrThrowIfLocked();
   }
 
+  public final boolean isTransformationAllowed() {
+    return isTransformationAllowed;
+  }
+
   public final boolean isTransformationSet() {
     return isSet(TRANSFORMATION);
   }
@@ -469,6 +490,8 @@ public abstract class BaseRequestOptions<CHILD extends BaseRequestOptions<CHILD>
    * Applies {@link com.bumptech.glide.load.resource.bitmap.CenterCrop} to all default types, and
    * ignores unknown types.
    *
+   * <p>This will override previous calls to {@link #dontTransform()}.
+   *
    * @param context Any {@link android.content.Context}.
    * @see #optionalTransform(Class, com.bumptech.glide.load.Transformation)
    * @see #centerCrop(android.content.Context)
@@ -480,6 +503,8 @@ public abstract class BaseRequestOptions<CHILD extends BaseRequestOptions<CHILD>
   /**
    * Applies {@link com.bumptech.glide.load.resource.bitmap.CenterCrop} to all default types and
    * throws an exception if asked to transform an unknown type.
+   *
+   * <p>This will override previous calls to {@link #dontTransform()}.
    *
    * @param context Any {@link android.content.Context}.
    * @see #transform(Class, com.bumptech.glide.load.Transformation)
@@ -493,28 +518,62 @@ public abstract class BaseRequestOptions<CHILD extends BaseRequestOptions<CHILD>
    * Applies {@link com.bumptech.glide.load.resource.bitmap.FitCenter} to all default types, and
    * ignores unknown types.
    *
+   * <p>This will override previous calls to {@link #dontTransform()}.
+   *
    * @param context Any {@link android.content.Context}.
    * @see #optionalTransform(Class, com.bumptech.glide.load.Transformation)
    * @see #fitCenter(android.content.Context)
    */
   public CHILD optionalFitCenter(Context context) {
-    return optionalTransform(context, DownsampleStrategy.CENTER_INSIDE, new FitCenter(context));
+    return optionalTransform(context, DownsampleStrategy.FIT_CENTER, new FitCenter(context));
   }
 
   /**
    * Applies {@link com.bumptech.glide.load.resource.bitmap.FitCenter} to all default types and
    * throws an exception if asked to transform an unknown type.
    *
+   * <p>This will override previous calls to {@link #dontTransform()}.
+   *
    * @param context Any {@link android.content.Context}.
    * @see #transform(Class, com.bumptech.glide.load.Transformation)
    * @see #optionalFitCenter(android.content.Context)
    */
   public CHILD fitCenter(Context context) {
-    return transform(context, DownsampleStrategy.CENTER_INSIDE, new FitCenter(context));
+    return transform(context, DownsampleStrategy.FIT_CENTER, new FitCenter(context));
+  }
+
+  /**
+   * Applies {@link com.bumptech.glide.load.resource.bitmap.CenterInside} to all default types, and
+   * ignores unknown types.
+   *
+   * <p>This will override previous calls to {@link #dontTransform()}.
+   *
+   * @param context Any {@link android.content.Context}.
+   * @see #optionalTransform(Class, com.bumptech.glide.load.Transformation)
+   * @see #centerInside(Context) (android.content.Context)
+   */
+  public CHILD optionalCenterInside(Context context) {
+    return optionalTransform(context, DownsampleStrategy.CENTER_INSIDE, new CenterInside(context));
+  }
+
+  /**
+   * Applies {@link com.bumptech.glide.load.resource.bitmap.CenterInside} to all default types and
+   * throws an exception if asked to transform an unknown type.
+   *
+   * <p>This will override previous calls to {@link #dontTransform()}.
+   *
+   * @param context Any {@link android.content.Context}.
+   * @see #transform(Class, com.bumptech.glide.load.Transformation)
+   * @see #optionalCenterInside(Context) (android.content.Context)
+   */
+  public CHILD centerInside(Context context) {
+    return transform(context, DownsampleStrategy.CENTER_INSIDE, new CenterInside(context));
   }
 
   /**
    * Applies {@link CircleCrop} to all default types, and ignores unknown types.
+   *
+   * <p>This will override previous calls to {@link #dontTransform()}.
    *
    * @param context Any {@link Context}.
    * @see #optionalTransform(Context, Transformation)
@@ -527,6 +586,8 @@ public abstract class BaseRequestOptions<CHILD extends BaseRequestOptions<CHILD>
   /**
    * Applies {@link CircleCrop} to all default types and throws an exception if asked to transform
    * an unknown type.
+   *
+   * <p>This will override previous calls to {@link #dontTransform()}.
    *
    * @param context Any {@link Context}.
    * @see #transform(Class, Transformation)
@@ -563,6 +624,8 @@ public abstract class BaseRequestOptions<CHILD extends BaseRequestOptions<CHILD>
    * {@link com.bumptech.glide.load.resource.gif.GifDrawable})
    * and throws an exception if asked to transform an unknown type.
    *
+   * <p>This will override previous calls to {@link #dontTransform()}.
+   *
    * @param context        Any {@link android.content.Context}.
    * @param transformation Any {@link com.bumptech.glide.load.Transformation} for
    *                       {@link android.graphics.Bitmap}s.
@@ -576,6 +639,7 @@ public abstract class BaseRequestOptions<CHILD extends BaseRequestOptions<CHILD>
 
     optionalTransform(context, transformation);
     isTransformationRequired = true;
+    fields |= TRANSFORMATION_REQUIRED;
     return selfOrThrowIfLocked();
   }
 
@@ -584,6 +648,8 @@ public abstract class BaseRequestOptions<CHILD extends BaseRequestOptions<CHILD>
    * {@link android.graphics.Bitmap Bitmaps} to the default types ({@link android.graphics.Bitmap},
    * {@link android.graphics.drawable.BitmapDrawable}, and
    * {@link com.bumptech.glide.load.resource.gif.GifDrawable}) and ignores unknown types.
+   *
+   * <p>This will override previous calls to {@link #dontTransform()}.
    *
    * @param context        Any {@link android.content.Context}.
    * @param transformation Any {@link com.bumptech.glide.load.Transformation} for
@@ -616,6 +682,8 @@ public abstract class BaseRequestOptions<CHILD extends BaseRequestOptions<CHILD>
    * an unknown resource class will throw an exception. To allow unknown types, users must always
    * call the optional version of each method. </p>
    *
+   * <p>This will override previous calls to {@link #dontTransform()}.
+   *
    * @param resourceClass  The type of resource to transform.
    * @param transformation The {@link com.bumptech.glide.load.Transformation} to apply.
    */
@@ -627,14 +695,18 @@ public abstract class BaseRequestOptions<CHILD extends BaseRequestOptions<CHILD>
 
     Preconditions.checkNotNull(resourceClass);
     Preconditions.checkNotNull(transformation);
-    fields |= TRANSFORMATION;
     transformations.put(resourceClass, transformation);
+    fields |= TRANSFORMATION;
+    isTransformationAllowed = true;
+    fields |= TRANSFORMATION_ALLOWED;
     return selfOrThrowIfLocked();
   }
 
   /**
    * Applies the given {@link com.bumptech.glide.load.Transformation} for any decoded resource of
    * the given type and throws if asked to transform an unknown resource type.
+   *
+   * <p>This will override previous calls to {@link #dontTransform()}.
    *
    * @param resourceClass  The type of resource to transform.
    * @param transformation The {@link com.bumptech.glide.load.Transformation} to apply.
@@ -647,6 +719,7 @@ public abstract class BaseRequestOptions<CHILD extends BaseRequestOptions<CHILD>
 
     optionalTransform(resourceClass, transformation);
     isTransformationRequired = true;
+    fields |= TRANSFORMATION_REQUIRED;
     return selfOrThrowIfLocked();
   }
 
@@ -660,9 +733,12 @@ public abstract class BaseRequestOptions<CHILD extends BaseRequestOptions<CHILD>
       return clone().dontTransform();
     }
 
-    fields &= ~TRANSFORMATION;
     transformations.clear();
+    fields &= ~TRANSFORMATION;
     isTransformationRequired = false;
+    fields &= ~TRANSFORMATION_REQUIRED;
+    isTransformationAllowed = false;
+    fields |= TRANSFORMATION_ALLOWED;
     return selfOrThrowIfLocked();
   }
 
@@ -690,6 +766,9 @@ public abstract class BaseRequestOptions<CHILD extends BaseRequestOptions<CHILD>
 
     if (isSet(other.fields, SIZE_MULTIPLIER)) {
       sizeMultiplier = other.sizeMultiplier;
+    }
+    if (isSet(other.fields, USE_UNLIMITED_SOURCE_GENERATORS_POOL)) {
+      useUnlimitedSourceGeneratorsPool = other.useUnlimitedSourceGeneratorsPool;
     }
     if (isSet(other.fields, DISK_CACHE_STRATEGY)) {
       diskCacheStrategy = other.diskCacheStrategy;
@@ -731,10 +810,25 @@ public abstract class BaseRequestOptions<CHILD extends BaseRequestOptions<CHILD>
     if (isSet(other.fields, THEME)) {
       theme = other.theme;
     }
+    if (isSet(other.fields, TRANSFORMATION_ALLOWED)) {
+      isTransformationAllowed = other.isTransformationAllowed;
+    }
+    if (isSet(other.fields, TRANSFORMATION_REQUIRED)) {
+      isTransformationRequired = other.isTransformationRequired;
+    }
+    if (isSet(other.fields, TRANSFORMATION)) {
+      transformations.putAll(other.transformations);
+    }
 
-    isTransformationRequired |= other.isTransformationRequired;
+    // Applying options with dontTransform() is expected to clear our transformations.
+    if (!isTransformationAllowed) {
+      transformations.clear();
+      fields &= ~TRANSFORMATION;
+      isTransformationRequired = false;
+      fields &= ~TRANSFORMATION_REQUIRED;
+    }
+
     fields |= other.fields;
-    transformations.putAll(other.transformations);
     options.putAll(other.options);
 
     return selfOrThrowIfLocked();
@@ -863,5 +957,9 @@ public abstract class BaseRequestOptions<CHILD extends BaseRequestOptions<CHILD>
 
   private static boolean isSet(int fields, int flag) {
     return (fields & flag) != 0;
+  }
+
+  public final boolean getUseUnlimitedSourceGeneratorsPool() {
+    return useUnlimitedSourceGeneratorsPool;
   }
 }

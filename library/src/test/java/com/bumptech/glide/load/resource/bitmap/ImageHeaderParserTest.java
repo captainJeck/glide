@@ -3,7 +3,8 @@ package com.bumptech.glide.load.resource.bitmap;
 import static com.google.common.truth.Truth.assertThat;
 import static org.junit.Assert.assertEquals;
 
-import com.bumptech.glide.load.engine.bitmap_recycle.LruByteArrayPool;
+import com.bumptech.glide.load.engine.bitmap_recycle.ArrayPool;
+import com.bumptech.glide.load.engine.bitmap_recycle.LruArrayPool;
 import com.bumptech.glide.load.resource.bitmap.ImageHeaderParser.ImageType;
 import com.bumptech.glide.testutil.TestResourceUtil;
 
@@ -28,11 +29,11 @@ public class ImageHeaderParserTest {
       new byte[] { (byte) 0x89, 0x50, 0x4e, 0x47, 0xd, 0xa, 0x1a, 0xa, 0x0, 0x0, 0x0, 0xd, 0x49,
           0x48, 0x44, 0x52, 0x0, 0x0, 0x1, (byte) 0x90, 0x0, 0x0, 0x1, 0x2c, 0x8, 0x6 };
 
-  private LruByteArrayPool byteArrayPool;
+  private ArrayPool byteArrayPool;
 
   @Before
   public void setUp() {
-    byteArrayPool = new LruByteArrayPool();
+    byteArrayPool = new LruArrayPool();
   }
 
   @Test
@@ -91,6 +92,32 @@ public class ImageHeaderParserTest {
       @Override
       public void run(ImageHeaderParser parser) throws IOException {
         assertEquals(ImageType.GIF, parser.getType());
+      }
+    });
+  }
+
+  @Test
+  public void testCanParseWebpWithAlpha() throws IOException {
+    byte[] data = new byte[] { 0x52, 0x49, 0x46, 0x46, 0x3c, 0x50, 0x00, 0x00, 0x57, 0x45, 0x42,
+        0x50, 0x56, 0x50, 0x38, 0x4c, 0x30, 0x50, 0x00, 0x00, 0x2f, (byte) 0xef, (byte) 0x80, 0x15,
+        0x10, (byte) 0x8d, 0x30, 0x68, 0x1b, (byte) 0xc9, (byte) 0x91, (byte) 0xb2 };
+    runTest(data, new ParserTestCase() {
+      @Override
+      public void run(ImageHeaderParser parser) throws IOException {
+        assertEquals(ImageType.WEBP_A, parser.getType());
+      }
+    });
+  }
+
+  @Test
+  public void testCanParseWebpWithoutAlpha() throws IOException {
+    byte[] data = new byte[] { 0x52, 0x49, 0x46, 0x46, 0x72, 0x1c, 0x00, 0x00, 0x57, 0x45, 0x42,
+        0x50, 0x56, 0x50, 0x38, 0x20, 0x66, 0x1c, 0x00, 0x00, 0x30, 0x3c, 0x01, (byte) 0x9d, 0x01,
+        0x2a, 0x52, 0x02, (byte) 0x94, 0x03, 0x00, (byte) 0xc7 };
+    runTest(data, new ParserTestCase() {
+      @Override
+      public void run(ImageHeaderParser parser) throws IOException {
+        assertEquals(ImageType.WEBP, parser.getType());
       }
     });
   }
@@ -160,11 +187,11 @@ public class ImageHeaderParserTest {
 
   private static void runTest(byte[] data, ParserTestCase test) throws IOException {
     InputStream is = new ByteArrayInputStream(data);
-    ImageHeaderParser parser = new ImageHeaderParser(is, new LruByteArrayPool());
+    ImageHeaderParser parser = new ImageHeaderParser(is, new LruArrayPool());
     test.run(parser);
 
     ByteBuffer buffer = ByteBuffer.wrap(data);
-    parser = new ImageHeaderParser(buffer, new LruByteArrayPool());
+    parser = new ImageHeaderParser(buffer, new LruArrayPool());
     test.run(parser);
   }
 

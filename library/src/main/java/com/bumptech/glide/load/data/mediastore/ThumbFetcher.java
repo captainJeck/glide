@@ -1,5 +1,6 @@
 package com.bumptech.glide.load.data.mediastore;
 
+import android.content.ContentResolver;
 import android.content.Context;
 import android.database.Cursor;
 import android.net.Uri;
@@ -11,7 +12,7 @@ import com.bumptech.glide.Priority;
 import com.bumptech.glide.load.DataSource;
 import com.bumptech.glide.load.data.DataFetcher;
 import com.bumptech.glide.load.data.ExifOrientationStream;
-import com.bumptech.glide.load.engine.bitmap_recycle.ByteArrayPool;
+import com.bumptech.glide.load.engine.bitmap_recycle.ArrayPool;
 
 import java.io.FileNotFoundException;
 import java.io.IOException;
@@ -21,29 +22,31 @@ import java.io.InputStream;
  * A {@link DataFetcher} implementation for {@link InputStream}s that loads data from thumbnail
  * files obtained from the {@link MediaStore}.
  */
+@SuppressWarnings("PMD.FieldDeclarationsShouldBeAtStartOfClass")
 public class ThumbFetcher implements DataFetcher<InputStream> {
   private static final String TAG = "MediaStoreThumbFetcher";
-  private final Context context;
   private final Uri mediaStoreImageUri;
   private final ThumbnailStreamOpener opener;
   private InputStream inputStream;
 
+  // TODO(nnaze): These build methods do not need the full Glide or Context objects.
+
   public static ThumbFetcher buildImageFetcher(Context context, Uri uri) {
-    return build(context, uri, new ImageThumbnailQuery());
+    return build(context, uri, new ImageThumbnailQuery(context.getContentResolver()));
   }
 
   public static ThumbFetcher buildVideoFetcher(Context context, Uri uri) {
-    return build(context, uri, new VideoThumbnailQuery());
+    return build(context, uri, new VideoThumbnailQuery(context.getContentResolver()));
   }
 
   private static ThumbFetcher build(Context context, Uri uri, ThumbnailQuery query) {
-    ByteArrayPool byteArrayPool = Glide.get(context).getByteArrayPool();
-    return new ThumbFetcher(context, uri, new ThumbnailStreamOpener(query, byteArrayPool));
+    ArrayPool byteArrayPool = Glide.get(context).getArrayPool();
+    return new ThumbFetcher(
+        uri, new ThumbnailStreamOpener(query, byteArrayPool, context.getContentResolver()));
   }
 
   // Visible for testing.
-  ThumbFetcher(Context context, Uri mediaStoreImageUri, ThumbnailStreamOpener opener) {
-    this.context = context;
+  ThumbFetcher(Uri mediaStoreImageUri, ThumbnailStreamOpener opener) {
     this.mediaStoreImageUri = mediaStoreImageUri;
     this.opener = opener;
   }
@@ -64,11 +67,11 @@ public class ThumbFetcher implements DataFetcher<InputStream> {
   }
 
   private InputStream openThumbInputStream() throws FileNotFoundException {
-    InputStream result = opener.open(context, mediaStoreImageUri);
+    InputStream result = opener.open(mediaStoreImageUri);
 
     int orientation = -1;
     if (result != null) {
-      orientation = opener.getOrientation(context, mediaStoreImageUri);
+      orientation = opener.getOrientation(mediaStoreImageUri);
     }
 
     if (orientation != -1) {
@@ -104,6 +107,13 @@ public class ThumbFetcher implements DataFetcher<InputStream> {
   }
 
   static class VideoThumbnailQuery implements ThumbnailQuery {
+
+    private final ContentResolver contentResolver;
+
+    VideoThumbnailQuery(ContentResolver contentResolver) {
+      this.contentResolver = contentResolver;
+    }
+
     private static final String[] PATH_PROJECTION = {
       MediaStore.Video.Thumbnails.DATA
     };
@@ -112,19 +122,26 @@ public class ThumbFetcher implements DataFetcher<InputStream> {
         + " AND " + MediaStore.Video.Thumbnails.VIDEO_ID + " = ?";
 
     @Override
-    public Cursor query(Context context, Uri uri) {
+    public Cursor query(Uri uri) {
       String videoId = uri.getLastPathSegment();
-      return context.getContentResolver().query(
+      return contentResolver.query(
           MediaStore.Video.Thumbnails.EXTERNAL_CONTENT_URI,
           PATH_PROJECTION,
           PATH_SELECTION,
-          new String[] { videoId },
+          new String[] {videoId},
           null /*sortOrder*/);
     }
   }
 
 
   static class ImageThumbnailQuery implements ThumbnailQuery {
+
+    private final ContentResolver contentResolver;
+
+    ImageThumbnailQuery(ContentResolver contentResolver) {
+      this.contentResolver = contentResolver;
+    }
+
     private static final String[] PATH_PROJECTION = {
       MediaStore.Images.Thumbnails.DATA,
     };
@@ -133,13 +150,13 @@ public class ThumbFetcher implements DataFetcher<InputStream> {
         + " AND " + MediaStore.Images.Thumbnails.IMAGE_ID + " = ?";
 
     @Override
-    public Cursor query(Context context, Uri uri) {
+    public Cursor query(Uri uri) {
       String imageId = uri.getLastPathSegment();
-      return context.getContentResolver().query(
+      return contentResolver.query(
           MediaStore.Images.Thumbnails.EXTERNAL_CONTENT_URI,
           PATH_PROJECTION,
           PATH_SELECTION,
-          new String[] { imageId },
+          new String[] {imageId},
           null /*sortOrder*/);
     }
   }

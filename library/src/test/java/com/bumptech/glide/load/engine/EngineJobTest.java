@@ -21,6 +21,7 @@ import android.support.v4.util.Pools;
 import com.bumptech.glide.load.DataSource;
 import com.bumptech.glide.load.Key;
 import com.bumptech.glide.load.engine.executor.GlideExecutor;
+import com.bumptech.glide.load.engine.executor.MockGlideExecutor;
 import com.bumptech.glide.request.ResourceCallback;
 
 import org.junit.Before;
@@ -414,27 +415,42 @@ public class EngineJobTest {
   @Test
   public void testSubmitsDecodeJobToSourceServiceOnSubmitForSource() {
     EngineJob<Object> job = harness.getJob();
+    harness.diskCacheService.shutdownNow();
     job.reschedule(harness.decodeJob);
 
-    verify(harness.sourceService).execute(eq(harness.decodeJob));
+    verify(harness.decodeJob).run();
   }
 
   @Test
   public void testSubmitsDecodeJobToDiskCacheServiceWhenDecodingFromCacheOnStart() {
     EngineJob<Object> job = harness.getJob();
     when(harness.decodeJob.willDecodeFromCache()).thenReturn(true);
+    harness.diskCacheService.shutdownNow();
     job.start(harness.decodeJob);
 
-    verify(harness.diskCacheService).execute(eq(harness.decodeJob));
+    verify(harness.decodeJob).run();
   }
 
   @Test
-  public void testSubmitsDecodeJobToSourceServiceWhenDecodingFromSoureOnlyOnStart() {
+  public void testSubmitsDecodeJobToSourceServiceWhenDecodingFromSourceOnlyOnStart() {
     EngineJob<Object> job = harness.getJob();
     when(harness.decodeJob.willDecodeFromCache()).thenReturn(false);
+    harness.diskCacheService.shutdownNow();
     job.start(harness.decodeJob);
 
-    verify(harness.sourceService).execute(eq(harness.decodeJob));
+    verify(harness.decodeJob).run();
+  }
+
+  @Test
+  public void testSubmitsDecodeJobToUnlimitedSourceServiceWhenDecodingFromSourceOnlyOnStart() {
+    harness.useUnlimitedSourceGeneratorPool = true;
+    EngineJob<Object> job = harness.getJob();
+
+    when(harness.decodeJob.willDecodeFromCache()).thenReturn(false);
+    harness.diskCacheService.shutdownNow();
+    job.start(harness.decodeJob);
+
+    verify(harness.decodeJob).run();
   }
 
   @SuppressWarnings("unchecked")
@@ -444,20 +460,22 @@ public class EngineJobTest {
     EngineResource<Object> engineResource = mock(EngineResource.class);
     EngineJobListener listener = mock(EngineJobListener.class);
     boolean isCacheable = true;
+    boolean useUnlimitedSourceGeneratorPool = false;
     int numCbs = 10;
     List<ResourceCallback> cbs = new ArrayList<>();
     EngineJob.EngineResourceFactory factory = mock(EngineJob.EngineResourceFactory.class);
     EngineJob<Object> job;
-    GlideExecutor diskCacheService = mock(GlideExecutor.class);
-    GlideExecutor sourceService = mock(GlideExecutor.class);
+    GlideExecutor diskCacheService = MockGlideExecutor.newMainThreadExecutor();
+    GlideExecutor sourceService = MockGlideExecutor.newMainThreadExecutor();
+    GlideExecutor sourceUnlimitedService = MockGlideExecutor.newMainThreadUnlimitedExecutor();
     Pools.Pool<EngineJob<?>> pool = new Pools.SimplePool<>(1);
     DecodeJob<Object> decodeJob = mock(DecodeJob.class);
     DataSource dataSource = DataSource.LOCAL;
 
     public MultiCbHarness() {
       when(factory.build(eq(resource), eq(isCacheable))).thenReturn(engineResource);
-      job = new EngineJob<>(diskCacheService, sourceService, listener, pool, factory)
-          .init(key, isCacheable);
+      job = new EngineJob<>(diskCacheService, sourceService, sourceUnlimitedService, listener, pool,
+          factory).init(key, isCacheable, useUnlimitedSourceGeneratorPool);
       for (int i = 0; i < numCbs; i++) {
         cbs.add(mock(ResourceCallback.class));
       }
@@ -476,17 +494,19 @@ public class EngineJobTest {
     Resource<Object> resource = mock(Resource.class);
     EngineResource<Object> engineResource = mock(EngineResource.class);
     EngineJobListener listener = mock(EngineJobListener.class);
-    GlideExecutor diskCacheService = mock(GlideExecutor.class);
-    GlideExecutor sourceService = mock(GlideExecutor.class);
+    GlideExecutor diskCacheService = MockGlideExecutor.newMainThreadExecutor();
+    GlideExecutor sourceService = MockGlideExecutor.newMainThreadExecutor();
+    GlideExecutor sourceUnlimitedService = MockGlideExecutor.newMainThreadUnlimitedExecutor();
     boolean isCacheable = true;
+    boolean useUnlimitedSourceGeneratorPool = false;
     DecodeJob<Object> decodeJob = mock(DecodeJob.class);
     Pools.Pool<EngineJob<?>> pool = new Pools.SimplePool<>(1);
     DataSource dataSource = DataSource.DATA_DISK_CACHE;
 
     public EngineJob<Object> getJob() {
       when(factory.build(eq(resource), eq(isCacheable))).thenReturn(engineResource);
-      EngineJob result = new EngineJob(diskCacheService, sourceService, listener, pool, factory)
-          .init(key, isCacheable);
+      EngineJob result = new EngineJob(diskCacheService, sourceService, sourceUnlimitedService,
+          listener, pool, factory).init(key, isCacheable, useUnlimitedSourceGeneratorPool);
       result.addCallback(cb);
       return result;
     }

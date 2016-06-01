@@ -1,7 +1,6 @@
 package com.bumptech.glide.load.data;
 
 import android.content.ContentResolver;
-import android.content.Context;
 import android.net.Uri;
 import android.util.Log;
 
@@ -21,25 +20,24 @@ import java.io.IOException;
 public abstract class LocalUriFetcher<T> implements DataFetcher<T> {
   private static final String TAG = "LocalUriFetcher";
   private final Uri uri;
-  private final Context context;
+  private final ContentResolver contentResolver;
   private T data;
 
   /**
    * Opens an input stream for a uri pointing to a local asset. Only certain uris are supported
    *
-   * @param context Any {@link android.content.Context}.
+   * @param contentResolver Any {@link android.content.ContentResolver}.
    * @param uri     A Uri pointing to a local asset. This load will fail if the uri isn't openable
    *                by {@link ContentResolver#openInputStream(android.net.Uri)}
    * @see ContentResolver#openInputStream(android.net.Uri)
    */
-  public LocalUriFetcher(Context context, Uri uri) {
-    this.context = context.getApplicationContext();
+  public LocalUriFetcher(ContentResolver contentResolver, Uri uri) {
+    this.contentResolver = contentResolver;
     this.uri = uri;
   }
 
   @Override
   public final void loadData(Priority priority, DataCallback<? super T> callback) {
-    ContentResolver contentResolver = context.getContentResolver();
     try {
       data = loadResource(uri, contentResolver);
     } catch (FileNotFoundException e) {

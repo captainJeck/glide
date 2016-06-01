@@ -77,7 +77,7 @@ public class GifDrawableTest {
     frameWidth = 120;
     frameHeight = 450;
     firstFrame = Bitmap.createBitmap(frameWidth, frameHeight, Bitmap.Config.RGB_565);
-    drawable = new GifDrawable(RuntimeEnvironment.application, frameLoader, bitmapPool, paint);
+    drawable = new GifDrawable(frameLoader, bitmapPool, paint);
     when(frameLoader.getWidth()).thenReturn(frameWidth);
     when(frameLoader.getHeight()).thenReturn(frameHeight);
     when(frameLoader.getCurrentFrame()).thenReturn(firstFrame);
@@ -104,7 +104,7 @@ public class GifDrawableTest {
   @Test
   public void testDoesDrawCurrentFrameIfOneIsAvailable() {
     Canvas canvas = mock(Canvas.class);
-    Bitmap currentFrame = Bitmap.createBitmap(100123, 123141, Bitmap.Config.ARGB_4444);
+    Bitmap currentFrame = Bitmap.createBitmap(100, 100, Bitmap.Config.ARGB_4444);
     when(frameLoader.getCurrentFrame()).thenReturn(currentFrame);
 
     drawable.draw(canvas);
